@@ -1,0 +1,22 @@
+{
+  "name": "homebridge-watergate",
+  "version": "0.0.1",
+  "description": "A homebridge plugin for a rpi based watering system: https://github.com/kezakez/watergate",
+  "license": "MIT",
+  "keywords": [
+    "homebridge-plugin"
+  ],
+  "repository": {
+    "type": "git"
+  },
+  "bugs": {
+    "url": "http://github.com/kezakez/watergate/issues"
+  },
+  "engines": {
+    "node": ">=0.12.0",
+    "homebridge": ">=0.2.0"
+  },
+  "dependencies": {
+    "onoff": "^3.2.2"
+  }
+}
