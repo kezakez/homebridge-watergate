@@ -18,23 +18,26 @@ const secondsRemaining = (currentStartTime, durationSeconds) => {
   return 0;
 };
 
-var hw = require("./hardware.js");
 let timeoutHandle = null;
 let startTime = null;
 let durationSeconds = 300;
 
 const turnOff = valveService => {
+  clearOffTimer();
   startTime = null;
-  hw.off(3);
+  client.off();
   valveService.setCharacteristic(Characteristic.InUse, 0);
 };
 
-const updateOffTimer = (valveService, turnOffSeconds) => {
-  //todo turn off after x seconds
+const clearOffTimer = () => {
   if (timeoutHandle) {
     console.log("clearing timeout");
     clearTimeout(timeoutHandle);
   }
+};
+
+const updateOffTimer = (valveService, turnOffSeconds) => {
+  clearOffTimer();
   console.log(`turning off in ${turnOffSeconds} seconds`);
   timeoutHandle = setTimeout(() => {
     console.log("turning off");
@@ -45,7 +48,7 @@ const updateOffTimer = (valveService, turnOffSeconds) => {
 
 const turnOn = (valveService, durationSeconds) => {
   startTime = new Date();
-  hw.on(3);
+  client.on();
   valveService.setCharacteristic(Characteristic.InUse, 1);
   valveService.setCharacteristic(Characteristic.SetDuration, durationSeconds);
 
@@ -53,10 +56,16 @@ const turnOn = (valveService, durationSeconds) => {
 
   updateOffTimer(valveService, remainingSeconds);
 };
+var client = require("./mqttclient.js");
+var server = require("./mqttserver.js");
 
 function Watergate(log, config) {
   this.log = log;
   this.name = config.name;
+
+  console.log({ config });
+  server.setup(config.username, config.password);
+  client.setup("localhost", "sonoff", config.username, config.password);
 }
 Watergate.prototype.getServices = function() {
   var plugin = this;

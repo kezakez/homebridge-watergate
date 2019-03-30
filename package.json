@@ -17,6 +17,7 @@
     "homebridge": ">=0.2.0"
   },
   "dependencies": {
-    "onoff": "^3.2.2"
+    "mosca": "^2.8.3",
+    "mqtt": "^2.18.8"
   }
 }
