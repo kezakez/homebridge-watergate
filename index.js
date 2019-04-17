@@ -22,10 +22,10 @@ let timeoutHandle = null;
 let startTime = null;
 let durationSeconds = 300;
 
-const turnOff = valveService => {
+const turnOff = (valveService, client) => {
   clearOffTimer();
   startTime = null;
-  client.off();
+  client.turnOff();
   valveService.setCharacteristic(Characteristic.InUse, 0);
 };
 
@@ -46,9 +46,9 @@ const updateOffTimer = (valveService, turnOffSeconds) => {
   }, turnOffSeconds * 1000);
 };
 
-const turnOn = (valveService, durationSeconds) => {
+const turnOn = (valveService, durationSeconds, client) => {
   startTime = new Date();
-  client.on();
+  client.turnOn();
   valveService.setCharacteristic(Characteristic.InUse, 1);
   valveService.setCharacteristic(Characteristic.SetDuration, durationSeconds);
 
@@ -56,16 +56,23 @@ const turnOn = (valveService, durationSeconds) => {
 
   updateOffTimer(valveService, remainingSeconds);
 };
-var client = require("./mqttclient.js");
-var server = require("./mqttserver.js");
 
 function Watergate(log, config) {
   this.log = log;
   this.name = config.name;
+  this.config = config;
 
   console.log({ config });
-  server.setup(config.username, config.password);
-  client.setup("localhost", "sonoff", config.username, config.password);
+
+  if (config.mqtt) {
+    this.client = require("./mqtt");
+    this.client.setup(config.mqtt);
+  } else {
+    // todo use platform and be abel to have both
+    this.client = require("./gpio");
+    this.client.setup(config.gpio);
+    console.log(this.client);
+  }
 }
 Watergate.prototype.getServices = function() {
   var plugin = this;
@@ -74,14 +81,24 @@ Watergate.prototype.getServices = function() {
   var valveService = new Service.Valve(plugin.name);
   valveService.getCharacteristic(Characteristic.ValveType).updateValue(1);
 
+  if (plugin.config.mqtt) {
+    plugin.client.on("statuschanged", status => {
+      valveService
+        .getCharacteristic(Characteristic.Active)
+        .updateValue(status ? 1 : 0);
+      valveService.setCharacteristic(Characteristic.InUse, status ? 1 : 0);
+    });
+  }
+
   valveService
     .getCharacteristic(Characteristic.Active)
     .on("set", function(value, callback) {
       plugin.log("set Active " + value);
       if (value) {
-        turnOn(valveService, durationSeconds);
+        console.log(plugin.client);
+        turnOn(valveService, durationSeconds, plugin.client);
       } else {
-        turnOff(valveService);
+        turnOff(valveService, plugin.client);
       }
       callback();
     })

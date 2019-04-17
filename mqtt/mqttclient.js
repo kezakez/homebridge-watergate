@@ -1,7 +1,7 @@
 var mqtt = require("mqtt");
 var client = null;
 var deviceId = "";
-var currentState = false;
+var onStateChanged = null;
 
 exports.setup = function(broker, device, username, password) {
   console.log("starting");
@@ -14,10 +14,13 @@ exports.setup = function(broker, device, username, password) {
   client.on("message", function(topic, message, packet) {
     // message is Buffer
     console.log("got message", topic, message.toString());
-    const result = JSON.parse(message);
 
-    if (result.POWER) {
-      currentState = result.POWER === "ON";
+    if (onStateChanged) {
+      const result = JSON.parse(message);
+
+      if (result.POWER) {
+        onStateChanged(result.POWER === "ON");
+      }
     }
   });
 
@@ -34,18 +37,20 @@ exports.setup = function(broker, device, username, password) {
   });
 };
 
-exports.on = function() {
+exports.turnOn = function() {
   console.log("on");
   client.publish(`cmnd/${deviceId}/POWER`, "on");
 };
 
-exports.off = function() {
+exports.turnOff = function() {
   console.log("off");
   client.publish(`cmnd/${deviceId}/POWER`, "off");
 };
 
-exports.getState = function() {
-  return currentState;
+exports.on = function(event, callback) {
+  if (event === "statuschanged") {
+    onStateChanged = callback;
+  }
 };
 
 exports.close = function() {
