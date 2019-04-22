@@ -1,19 +1,16 @@
+// gpio related functionality
+
 var Gpio = require("onoff").Gpio;
 
-var pins = [14, 15, 18, 23, 24, 25, 8, 7];
+exports.setup = function(config) {};
 
-exports.setup = function(config) {
-  //todo get use and pins working for multiple when platform is going
-  relay = config.use;
-};
-
-exports.turnOn = function() {
-  var pin = new Gpio(pins[relay - 1], "out");
+exports.turnOn = function(gpioNumber) {
+  var pin = new Gpio(gpioNumber, "out");
   pin.writeSync(1);
 };
 
-exports.turnOff = function() {
-  var pin = new Gpio(pins[relay - 1], "out");
+exports.turnOff = function(gpioNumber) {
+  var pin = new Gpio(gpioNumber, "out");
   pin.writeSync(0);
 };
 

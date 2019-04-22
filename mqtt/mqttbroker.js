@@ -1,3 +1,5 @@
+// mqtt broker functionality, used when one is not specified
+
 var mosca = require("mosca");
 
 var settings = {

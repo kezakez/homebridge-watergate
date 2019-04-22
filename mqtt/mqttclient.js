@@ -4,7 +4,6 @@ var deviceId = "";
 var onStateChanged = null;
 
 exports.setup = function(broker, device, username, password) {
-  console.log("starting");
   deviceId = device;
   client = mqtt.connect(`mqtt://${broker}`, {
     username,

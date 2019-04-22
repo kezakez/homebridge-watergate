@@ -1,142 +1,65 @@
-var Service, Characteristic;
+// platform functionality, creates instances of valves based on config
+var valve = require("./valve");
 
 module.exports = function(homebridge) {
+  Accessory = homebridge.platformAccessory;
   Service = homebridge.hap.Service;
   Characteristic = homebridge.hap.Characteristic;
-  homebridge.registerAccessory("homebridge-watergate", "Watergate", Watergate);
+  UUIDGen = homebridge.hap.uuid;
+  homebridge.registerPlatform(
+    "homebridge-watergate",
+    "Watergate",
+    Watergate,
+    true
+  );
 };
 
-const secondsRemaining = (currentStartTime, durationSeconds) => {
-  const now = new Date();
-  const currentRunTime = (now - currentStartTime) / 1000;
-  const remaining = Math.round(durationSeconds - currentRunTime);
-  console.log({ currentStartTime });
-  console.log({ remaining });
-  if (remaining > 0) {
-    return remaining;
-  }
-  return 0;
-};
-
-let timeoutHandle = null;
-let startTime = null;
-let durationSeconds = 300;
-
-const turnOff = (valveService, client) => {
-  clearOffTimer();
-  startTime = null;
-  client.turnOff();
-  valveService.setCharacteristic(Characteristic.InUse, 0);
-};
-
-const clearOffTimer = () => {
-  if (timeoutHandle) {
-    console.log("clearing timeout");
-    clearTimeout(timeoutHandle);
-  }
-};
-
-const updateOffTimer = (valveService, turnOffSeconds) => {
-  clearOffTimer();
-  console.log(`turning off in ${turnOffSeconds} seconds`);
-  timeoutHandle = setTimeout(() => {
-    console.log("turning off");
-    valveService.setCharacteristic(Characteristic.Active, 0);
-    turnOff(valveService);
-  }, turnOffSeconds * 1000);
-};
-
-const turnOn = (valveService, durationSeconds, client) => {
-  startTime = new Date();
-  client.turnOn();
-  valveService.setCharacteristic(Characteristic.InUse, 1);
-  valveService.setCharacteristic(Characteristic.SetDuration, durationSeconds);
-
-  const remainingSeconds = secondsRemaining(startTime, durationSeconds);
-
-  updateOffTimer(valveService, remainingSeconds);
-};
-
-function Watergate(log, config) {
+function Watergate(log, config, api) {
   this.log = log;
-  this.name = config.name;
   this.config = config;
+  this.api = api;
+  this.accessories = [];
 
-  console.log({ config });
-
-  if (config.mqtt) {
-    this.client = require("./mqtt");
-    this.client.setup(config.mqtt);
-  } else {
-    // todo use platform and be abel to have both
-    this.client = require("./gpio");
-    this.client.setup(config.gpio);
-    console.log(this.client);
-  }
-}
-Watergate.prototype.getServices = function() {
-  var plugin = this;
-  plugin.log("creating watergate valve");
-
-  var valveService = new Service.Valve(plugin.name);
-  valveService.getCharacteristic(Characteristic.ValveType).updateValue(1);
-
-  if (plugin.config.mqtt) {
-    plugin.client.on("statuschanged", status => {
-      valveService
-        .getCharacteristic(Characteristic.Active)
-        .updateValue(status ? 1 : 0);
-      valveService.setCharacteristic(Characteristic.InUse, status ? 1 : 0);
-    });
-  }
-
-  valveService
-    .getCharacteristic(Characteristic.Active)
-    .on("set", function(value, callback) {
-      plugin.log("set Active " + value);
-      if (value) {
-        console.log(plugin.client);
-        turnOn(valveService, durationSeconds, plugin.client);
-      } else {
-        turnOff(valveService, plugin.client);
+  api.on(
+    "didFinishLaunching",
+    function() {
+      console.log("finished loading");
+      if (config.mqtt && config.mqtt.enabled) {
+        const mqtt = require("./mqtt");
+        const devices = mqtt.setupDevices(config.mqtt);
+        devices.forEach(device => this.addAccessory(device.name));
       }
-      callback();
-    })
-    .on("get", function(callback) {
-      const active = startTime !== null;
-      plugin.log("get Active " + active);
-      callback(null, active);
-    });
+      if (config.gpio && config.gpio.enabled) {
+        const gpio = require("./gpio");
+        gpio.setup(config.mqtt);
+      }
+    }.bind(this)
+  );
+}
 
-  valveService
-    .addCharacteristic(Characteristic.SetDuration)
-    .on("set", function(value, callback) {
-      plugin.log("set SetDuration " + value);
-      durationSeconds = value;
-      valveService.setCharacteristic(
-        Characteristic.RemainingDuration,
-        secondsRemaining(startTime, durationSeconds)
-      );
+Watergate.prototype.addAccessory = function(accessoryName) {
+  console.log("add accessory");
+  console.log(this.accessories);
+  var uuid = UUIDGen.generate(accessoryName);
+  if (this.accessories.find(item => item.UUID === uuid)) {
+    console.log("not adding already set up accessory", accessoryName);
+    return;
+  }
 
-      callback();
-    })
-    .on("get", function(callback) {
-      plugin.log("get SetDuration " + durationSeconds);
-      callback(null, durationSeconds);
-    });
+  var newAccessory = new Accessory(accessoryName, uuid);
+  const valveService = new Service.Valve(accessoryName);
+  const service = valve.bindValveService(valveService, this.log);
+  newAccessory.addService(service, accessoryName);
 
-  valveService
-    .getCharacteristic(Characteristic.RemainingDuration)
-    .on("set", function(value, callback) {
-      plugin.log("set Remaining " + value);
-      updateOffTimer(valveService, value);
-      callback();
-    })
-    .on("get", function(callback) {
-      const remaining = secondsRemaining(startTime, durationSeconds);
-      plugin.log("get Remaining " + remaining);
-      callback(null, remaining);
-    });
+  this.accessories.push(newAccessory);
+  this.api.registerPlatformAccessories("homebridge-watergate", "Watergate", [
+    newAccessory
+  ]);
+};
 
-  return [valveService];
+Watergate.prototype.configureAccessory = function(accessory) {
+  this.log("config accessory", accessory);
+  valve.bindValveService(accessory.services[1], this.log);
+
+  this.accessories.push(accessory);
 };

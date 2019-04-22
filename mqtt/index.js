@@ -1,28 +1,52 @@
-var client = require("./mqtt/mqttclient.js");
-var server = require("./mqtt/mqttserver.js");
+// mqtt related functionality
 
-var mqtt = require("mqtt");
-var client = null;
-var deviceId = "";
-var onStateChanged = null;
+var client = require("./mqttclient.js");
 
-exports.setup = function(config) {
-  if (!config.broker) {
-    server.setup(config.username, config.password);
+exports.setupDevices = function(mqttConfig) {
+  const brokerHost = mqttConfig.broker || "localhost";
+  if (brokerHost === "localhost") {
+    var broker = require("./mqttbroker.js");
+    broker.setup(mqttConfig.username, mqttConfig.password);
   }
-  client.setup("localhost", "sonoff", config.username, config.password);
+  client.setup(
+    mqttConfig.broker,
+    "sonoff",
+    mqttConfig.username,
+    mqttConfig.password
+  );
+
+  return mqttConfig.devices.map(device => {
+    if (device.enabled) {
+      return new MqttDevice(device.name, device.topic);
+    }
+  });
 };
 
-exports.turnOn = function() {
-  client.turnOn();
-};
+class MqttDevice {
+  constructor(name, topic) {
+    this.name = name;
+    this.topic = topic;
+  }
 
-exports.turnOff = function() {
-  client.turnOff();
-};
+  turnOn() {
+    client.turnOn();
+  }
 
-exports.on = function(event, callback) {};
+  turnOff() {
+    client.turnOff();
+  }
 
-exports.close = function() {
-  client.end();
-};
+  on(event, callback) {
+    //todo this needs to be moved
+    plugin.client.on("statuschanged", status => {
+      valveService
+        .getCharacteristic(Characteristic.Active)
+        .updateValue(status ? 1 : 0);
+      valveService.setCharacteristic(Characteristic.InUse, status ? 1 : 0);
+    });
+  }
+
+  close() {
+    client.end();
+  }
+}
