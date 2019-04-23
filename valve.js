@@ -12,12 +12,49 @@ const secondsRemaining = (currentStartTime, durationSeconds) => {
   return 0;
 };
 
-exports.bindValveService = function(valveService, log) {
+exports.bindValveService = function(valveService, device, log) {
   log("binding watergate valve");
 
   let timeoutHandle = null;
   let startTime = null;
   let durationSeconds = 300;
+
+  const clearOffTimer = () => {
+    if (timeoutHandle) {
+      console.log("clearing timeout");
+      clearTimeout(timeoutHandle);
+    }
+  };
+
+  const turnOff = () => {
+    clearOffTimer();
+    startTime = null;
+    device.turnOff();
+    valveService.setCharacteristic(Characteristic.InUse, 0);
+  };
+
+  const updateOffTimer = turnOffSeconds => {
+    clearOffTimer();
+    console.log(`turning off in ${turnOffSeconds} seconds`);
+    timeoutHandle = setTimeout(() => {
+      console.log("turning off");
+      valveService.setCharacteristic(Characteristic.Active, 0);
+      turnOff(valveService);
+    }, turnOffSeconds * 1000);
+  };
+
+  const turnOn = () => {
+    console.log("turnOn");
+
+    startTime = new Date();
+    device.turnOn();
+    valveService.setCharacteristic(Characteristic.InUse, 1);
+    valveService.setCharacteristic(Characteristic.SetDuration, durationSeconds);
+
+    const remainingSeconds = secondsRemaining(startTime, durationSeconds);
+
+    updateOffTimer(remainingSeconds);
+  };
 
   valveService.getCharacteristic(Characteristic.ValveType).updateValue(1);
 
@@ -26,16 +63,17 @@ exports.bindValveService = function(valveService, log) {
     .on("set", function(value, callback) {
       log("set Active " + value);
       if (value) {
-        //turnOn(valveService, durationSeconds, plugin.client);
+        turnOn();
       } else {
-        //turnOff(valveService, plugin.client);
+        turnOff();
       }
+      console.log("callbback");
       callback();
     })
     .on("get", function(callback) {
       const active = startTime !== null;
       log("get Active " + active);
-      callback(null, active);
+      callback(null, active ? 1 : 0);
     });
 
   valveService

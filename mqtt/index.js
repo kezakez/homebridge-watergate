@@ -6,8 +6,10 @@ exports.setupDevices = function(mqttConfig) {
   const brokerHost = mqttConfig.broker || "localhost";
   if (brokerHost === "localhost") {
     var broker = require("./mqttbroker.js");
+    console.log("setting up mqtt broker");
     broker.setup(mqttConfig.username, mqttConfig.password);
   }
+  console.log("setting up mqtt client");
   client.setup(
     mqttConfig.broker,
     "sonoff",
@@ -29,10 +31,12 @@ class MqttDevice {
   }
 
   turnOn() {
+    console.log("sending mqtt turn on");
     client.turnOn();
   }
 
   turnOff() {
+    console.log("sending mqtt turn off");
     client.turnOff();
   }
 

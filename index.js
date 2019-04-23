@@ -27,7 +27,7 @@ function Watergate(log, config, api) {
       if (config.mqtt && config.mqtt.enabled) {
         const mqtt = require("./mqtt");
         const devices = mqtt.setupDevices(config.mqtt);
-        devices.forEach(device => this.addAccessory(device.name));
+        devices.forEach(device => this.addAccessory(device.name, device));
       }
       if (config.gpio && config.gpio.enabled) {
         const gpio = require("./gpio");
@@ -37,29 +37,27 @@ function Watergate(log, config, api) {
   );
 }
 
-Watergate.prototype.addAccessory = function(accessoryName) {
+Watergate.prototype.addAccessory = function(accessoryName, device) {
   console.log("add accessory");
   console.log(this.accessories);
   var uuid = UUIDGen.generate(accessoryName);
-  if (this.accessories.find(item => item.UUID === uuid)) {
-    console.log("not adding already set up accessory", accessoryName);
-    return;
+  const existingAccessory = this.accessories.find(item => item.UUID === uuid);
+  const accessory = existingAccessory || new Accessory(accessoryName, uuid);
+  let valveService;
+  if (!existingAccessory) {
+    valveService = new Service.Valve(accessoryName);
+    accessory.addService(valveService, accessoryName);
+    this.accessories.push(accessory);
+    this.api.registerPlatformAccessories("homebridge-watergate", "Watergate", [
+      newAccessory
+    ]);
+  } else {
+    // todo maybe creating an accessory has a default service set up for you to use
+    valveService = accessory.services[1];
   }
-
-  var newAccessory = new Accessory(accessoryName, uuid);
-  const valveService = new Service.Valve(accessoryName);
-  const service = valve.bindValveService(valveService, this.log);
-  newAccessory.addService(service, accessoryName);
-
-  this.accessories.push(newAccessory);
-  this.api.registerPlatformAccessories("homebridge-watergate", "Watergate", [
-    newAccessory
-  ]);
+  valve.bindValveService(valveService, device, this.log);
 };
 
 Watergate.prototype.configureAccessory = function(accessory) {
-  this.log("config accessory", accessory);
-  valve.bindValveService(accessory.services[1], this.log);
-
   this.accessories.push(accessory);
 };
