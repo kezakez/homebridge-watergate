@@ -2,7 +2,7 @@
 
 var client = require("./mqttclient.js");
 
-exports.setupDevices = function(mqttConfig) {
+exports.setupDevices = function (mqttConfig) {
   const brokerHost = mqttConfig.broker || "localhost";
   if (brokerHost === "localhost") {
     var broker = require("./mqttbroker.js");
@@ -21,7 +21,7 @@ exports.setupDevices = function(mqttConfig) {
     if (device.enabled) {
       return new MqttDevice(device.name, device.topic);
     }
-  });
+  }).filter(device => !!device);
 };
 
 class MqttDevice {
@@ -41,13 +41,7 @@ class MqttDevice {
   }
 
   on(event, callback) {
-    //todo this needs to be moved
-    plugin.client.on("statuschanged", status => {
-      valveService
-        .getCharacteristic(Characteristic.Active)
-        .updateValue(status ? 1 : 0);
-      valveService.setCharacteristic(Characteristic.InUse, status ? 1 : 0);
-    });
+    client.on(event, callback);
   }
 
   close() {

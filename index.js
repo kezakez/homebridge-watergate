@@ -1,7 +1,7 @@
 // platform functionality, creates instances of valves based on config
 var valve = require("./valve");
 
-module.exports = function(homebridge) {
+module.exports = function (homebridge) {
   Accessory = homebridge.platformAccessory;
   Service = homebridge.hap.Service;
   Characteristic = homebridge.hap.Characteristic;
@@ -22,34 +22,38 @@ function Watergate(log, config, api) {
 
   api.on(
     "didFinishLaunching",
-    function() {
+    function () {
       console.log("finished loading");
+      let devices = [];
       if (config.mqtt && config.mqtt.enabled) {
         const mqtt = require("./mqtt");
-        const devices = mqtt.setupDevices(config.mqtt);
-        devices.forEach(device => this.addAccessory(device.name, device));
+        devices.push(...mqtt.setupDevices(config.mqtt));
       }
       if (config.gpio && config.gpio.enabled) {
         const gpio = require("./gpio");
-        gpio.setup(config.mqtt);
+        devices.push(...gpio.setupDevices(config.gpio));
       }
+      devices.forEach(device => {
+        console.log(device)
+        this.addAccessory(device)
+      });
     }.bind(this)
   );
 }
 
-Watergate.prototype.addAccessory = function(accessoryName, device) {
+Watergate.prototype.addAccessory = function (device) {
   console.log("add accessory");
-  console.log(this.accessories);
-  var uuid = UUIDGen.generate(accessoryName);
+  console.log({ device });
+  var uuid = UUIDGen.generate(device.name);
   const existingAccessory = this.accessories.find(item => item.UUID === uuid);
-  const accessory = existingAccessory || new Accessory(accessoryName, uuid);
+  const accessory = existingAccessory || new Accessory(device.name, uuid);
   let valveService;
   if (!existingAccessory) {
-    valveService = new Service.Valve(accessoryName);
-    accessory.addService(valveService, accessoryName);
+    valveService = new Service.Valve(device.name);
+    accessory.addService(valveService, device.name);
     this.accessories.push(accessory);
     this.api.registerPlatformAccessories("homebridge-watergate", "Watergate", [
-      newAccessory
+      accessory
     ]);
   } else {
     // todo maybe creating an accessory has a default service set up for you to use
@@ -58,6 +62,7 @@ Watergate.prototype.addAccessory = function(accessoryName, device) {
   valve.bindValveService(valveService, device, this.log);
 };
 
-Watergate.prototype.configureAccessory = function(accessory) {
+Watergate.prototype.configureAccessory = function (accessory) {
+  // todo remove accessories no longer in the config
   this.accessories.push(accessory);
 };

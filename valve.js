@@ -12,7 +12,7 @@ const secondsRemaining = (currentStartTime, durationSeconds) => {
   return 0;
 };
 
-exports.bindValveService = function(valveService, device, log) {
+exports.bindValveService = function (valveService, device, log) {
   log("binding watergate valve");
 
   let timeoutHandle = null;
@@ -60,17 +60,16 @@ exports.bindValveService = function(valveService, device, log) {
 
   valveService
     .getCharacteristic(Characteristic.Active)
-    .on("set", function(value, callback) {
+    .on("set", function (value, callback) {
       log("set Active " + value);
       if (value) {
         turnOn();
       } else {
         turnOff();
       }
-      console.log("callbback");
       callback();
     })
-    .on("get", function(callback) {
+    .on("get", function (callback) {
       const active = startTime !== null;
       log("get Active " + active);
       callback(null, active ? 1 : 0);
@@ -78,7 +77,7 @@ exports.bindValveService = function(valveService, device, log) {
 
   valveService
     .getCharacteristic(Characteristic.SetDuration)
-    .on("set", function(value, callback) {
+    .on("set", function (value, callback) {
       log("set SetDuration " + value);
       durationSeconds = value;
       valveService.setCharacteristic(
@@ -88,23 +87,32 @@ exports.bindValveService = function(valveService, device, log) {
 
       callback();
     })
-    .on("get", function(callback) {
+    .on("get", function (callback) {
       log("get SetDuration " + durationSeconds);
       callback(null, durationSeconds);
     });
 
   valveService
     .getCharacteristic(Characteristic.RemainingDuration)
-    .on("set", function(value, callback) {
+    .on("set", function (value, callback) {
       log("set Remaining " + value);
-      //updateOffTimer(valveService, value);
+      updateOffTimer(value);
       callback();
     })
-    .on("get", function(callback) {
+    .on("get", function (callback) {
       const remaining = secondsRemaining(startTime, durationSeconds);
       log("get Remaining " + remaining);
       callback(null, remaining);
     });
+
+  device.on('statuschanged', status => {
+    valveService
+      .getCharacteristic(Characteristic.Active)
+      .updateValue(status ? 1 : 0);
+    valveService
+      .getCharacteristic(Characteristic.InUse)
+      .updateValue(status ? 1 : 0);
+  });
 
   return valveService;
 };

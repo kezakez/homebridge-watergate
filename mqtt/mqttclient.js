@@ -3,14 +3,14 @@ var client = null;
 var deviceId = "";
 var onStateChanged = null;
 
-exports.setup = function(broker, device, username, password) {
+exports.setup = function (broker, device, username, password) {
   deviceId = device;
   client = mqtt.connect(`mqtt://${broker}`, {
     username,
     password
   });
 
-  client.on("message", function(topic, message, packet) {
+  client.on("message", function (topic, message, packet) {
     // message is Buffer
     console.log("got message", topic, message.toString());
 
@@ -18,14 +18,15 @@ exports.setup = function(broker, device, username, password) {
       const result = JSON.parse(message);
 
       if (result.POWER) {
+        console.log('about to call onStateChanged')
         onStateChanged(result.POWER === "ON");
       }
     }
   });
 
-  client.on("connect", function() {
+  client.on("connect", function () {
     console.log("connected");
-    client.subscribe(`stat/${deviceId}/RESULT`, function(err) {
+    client.subscribe(`stat/${deviceId}/RESULT`, function (err) {
       if (err) {
         console.log({ err });
       } else {
@@ -36,22 +37,22 @@ exports.setup = function(broker, device, username, password) {
   });
 };
 
-exports.turnOn = function() {
+exports.turnOn = function () {
   console.log("on");
   client.publish(`cmnd/${deviceId}/POWER`, "on");
 };
 
-exports.turnOff = function() {
+exports.turnOff = function () {
   console.log("off");
   client.publish(`cmnd/${deviceId}/POWER`, "off");
 };
 
-exports.on = function(event, callback) {
+exports.on = function (event, callback) {
   if (event === "statuschanged") {
     onStateChanged = callback;
   }
 };
 
-exports.close = function() {
+exports.close = function () {
   client.end();
 };
