@@ -4,21 +4,13 @@ import { WatergatePlatform } from './platform';
 
 /**
  * Platform Accessory
- * An instance of this class is created for each accessory your platform registers
- * Each accessory may expose multiple services of different service types.
+ * An instance of this class is created for each accessory registered
  */
 export class WatergateValve {
   private service: Service;
 
-  /**
-   * These are just used to create a working example
-   * You should implement your own code to track the state of your accessory
-   */
-  private states = {
-    Active: false,
-    StartTime: null as Date | null,
-    DurationSeconds: 0,
-  };
+  private startTime: Date | null = null;
+  private timeoutHandle: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly platform: WatergatePlatform,
@@ -32,17 +24,13 @@ export class WatergateValve {
       .setCharacteristic(this.platform.Characteristic.SerialNumber, 'Default-Serial');
 
     // get the Valve service if it exists, otherwise create a new Valve service
-    // you can create multiple services for each accessory
     this.service = this.accessory.getService(this.platform.Service.Valve) || this.accessory.addService(this.platform.Service.Valve);
 
     // set the service name, this is what is displayed as the default name on the Home app
-    // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
     this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.name);
 
-    // each service must implement at-minimum the "required characteristics" for the given service type
     // see https://developers.homebridge.io/#/service/Valve
 
-    // register handlers for the Active Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.Active)
       .onSet(this.setActive.bind(this))
       .onGet(this.getActive.bind(this));
@@ -61,55 +49,43 @@ export class WatergateValve {
       .onGet(this.getRemainingDuration.bind(this));
   }
 
-  /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, turning on a Light bulb.
-   */
   async setActive(value: CharacteristicValue) {
     const active = value as boolean;
-    this.platform.log.debug('SetActive: ', active);
-    this.service.setCharacteristic(this.platform.Characteristic.InUse, active);
+    this.startTime = active ? new Date() : null;
+    this.platform.log.debug('SetActive: ', active, this.startTime);
+
     //TODO set pin
-    this.states.Active = active;
-    this.states.StartTime = active ? new Date() : null;
+
+    if (this.timeoutHandle) {
+      clearTimeout(this.timeoutHandle);
+      this.timeoutHandle = null;
+    }
+    if (active) {
+      const runSeconds = this.calculateRemainingDuration();
+      this.service.setCharacteristic(this.platform.Characteristic.RemainingDuration, runSeconds);
+      this.platform.log.debug(`turning off in ${runSeconds} seconds`);
+
+      this.timeoutHandle = setTimeout(() => {
+        this.platform.log.debug("turning off");
+        this.service.setCharacteristic(this.platform.Characteristic.Active, this.platform.Characteristic.Active.INACTIVE);
+      }, runSeconds * 1000);
+    } else {
+      this.service.setCharacteristic(this.platform.Characteristic.RemainingDuration, 0);
+    }
+    this.service.setCharacteristic(this.platform.Characteristic.InUse, active);
   }
 
-  /**
-   * Handle the "GET" requests from HomeKit
-   * These are sent when HomeKit wants to know the current state of the accessory, for example, checking if a Light bulb is on.
-   *
-   * GET requests should return as fast as possible. A long delay here will result in
-   * HomeKit being unresponsive and a bad user experience in general.
-   *
-   * If your device takes time to respond you should update the status of your device
-   * asynchronously instead using the `updateCharacteristic` method instead.
-
-   * @example
-   * this.service.updateCharacteristic(this.platform.Characteristic.On, true)
-   */
   async getActive(): Promise<CharacteristicValue> {
-    const isOn = this.states.Active;
+    const isOn = !!this.startTime;
     this.platform.log.debug('GetActive: ', isOn);
     return isOn;
   }
 
-  /**
-   * Handle the "GET" requests from HomeKit
-   * These are sent when HomeKit wants to know the current state of the accessory, for example, checking if a Light bulb is on.
-   *
-   * GET requests should return as fast as possible. A long delay here will result in
-   * HomeKit being unresponsive and a bad user experience in general.
-   *
-   * If your device takes time to respond you should update the status of your device
-   * asynchronously instead using the `updateCharacteristic` method instead.
- 
-   * @example
-   * this.service.updateCharacteristic(this.platform.Characteristic.On, true)
-   */
   async getInUse(): Promise<CharacteristicValue> {
-    // implement your own code to check if the device is on
-    const isOn = this.states.Active;
+    const isOn = !!this.startTime;
+
     //TODO read from pin
+
     this.platform.log.debug('GetInUse: ', isOn);
     return isOn;
   }
@@ -119,28 +95,37 @@ export class WatergateValve {
   }
 
   async setSetDuration(value: CharacteristicValue) {
-    this.platform.log.debug('setSetDuration');
-    this.states.DurationSeconds = value as number;
+    this.platform.log.debug('setSetDuration', value);
+    const duration = value as number;
+    this.accessory.context.duration = duration;
+  }
+
+  private getDuration(): number {
+    return Math.max(this.accessory.context.duration || 0, 1*60);
   }
 
   async getSetDuration(): Promise<CharacteristicValue> {
-    const seconds = this.states.DurationSeconds;
-    this.platform.log.debug('getSetDuration: ', seconds);
-    return seconds;
+    const duration = this.getDuration();
+    this.platform.log.debug('getSetDuration: ', duration);
+    return duration;
   }
 
   async getRemainingDuration(): Promise<CharacteristicValue> {
     this.platform.log.debug('getRemainingDuration');
-    if (!this.states.StartTime) {
+    return this.calculateRemainingDuration();
+  }
+
+  private calculateRemainingDuration(): number { 
+    if (!this.startTime) {
       return 0;
     }
+    const duration = this.getDuration();
     const now = new Date();
-    const currentRunTime = (now.getTime() - this.states.StartTime.getTime()) / 1000;
-    const remaining = Math.round(this.states.DurationSeconds - currentRunTime);
+    const currentRunTime = (now.getTime() - this.startTime.getTime()) / 1000;
+    const remaining = Math.round(duration - currentRunTime);
     if (remaining > 0) {
       return remaining;
     }
     return 0;
   }
-
 }

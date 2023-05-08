@@ -68,7 +68,7 @@ export class WatergatePlatform implements DynamicPlatformPlugin {
   }
 
   getIdFromPin(pinConfig) {
-    return this.api.hap.uuid.generate(pinConfig.name + pinConfig.pin.toString())
+    return this.api.hap.uuid.generate(pinConfig.pin.toString())
   }
 
   addOrRestoreDevice(device) {
