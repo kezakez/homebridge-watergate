@@ -15,6 +15,8 @@ export class WatergatePlatform implements DynamicPlatformPlugin {
   // this is used to track restored cached accessories
   public readonly accessories: PlatformAccessory[] = [];
 
+  private valves: WatergateValve[] = [];
+
   constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig,
@@ -30,6 +32,12 @@ export class WatergatePlatform implements DynamicPlatformPlugin {
       log.debug('Executed didFinishLaunching callback');
       // run the method to discover / register your devices as accessories
       this.discoverDevices();
+    });
+
+    this.api.on('shutdown', () => {
+      this.valves.forEach(valve => { 
+        valve.shutdown();
+      })
     });
   }
 
@@ -92,11 +100,11 @@ export class WatergatePlatform implements DynamicPlatformPlugin {
 
       // create the accessory handler for the restored accessory
       // this is imported from `platformAccessory.ts`
-      new WatergateValve(this, existingAccessory);
+      this.valves.push(new WatergateValve(this, existingAccessory));
     } else {
       // the accessory does not yet exist, so we need to create it
       this.log.info('Adding new accessory:', device.name);
-
+      
       // create a new accessory
       const accessory = new this.api.platformAccessory(device.name, uuid);
 
@@ -106,7 +114,7 @@ export class WatergatePlatform implements DynamicPlatformPlugin {
 
       // create the accessory handler for the newly create accessory
       // this is imported from `platformAccessory.ts`
-      new WatergateValve(this, accessory);
+      this.valves.push(new WatergateValve(this, accessory));
 
       // link the accessory to your platform
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);

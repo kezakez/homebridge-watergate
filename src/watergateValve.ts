@@ -1,6 +1,7 @@
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 
 import { WatergatePlatform } from './platform';
+import { GpioDevice } from './gpioDevice';
 
 /**
  * Platform Accessory
@@ -11,6 +12,7 @@ export class WatergateValve {
 
   private startTime: Date | null = null;
   private timeoutHandle: NodeJS.Timeout | null = null;
+  private gpio: GpioDevice;
 
   constructor(
     private readonly platform: WatergatePlatform,
@@ -28,6 +30,8 @@ export class WatergateValve {
 
     // set the service name, this is what is displayed as the default name on the Home app
     this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.name);
+
+    this.gpio = new GpioDevice(accessory.context.device.pin, this.platform);
 
     // see https://developers.homebridge.io/#/service/Valve
 
@@ -54,7 +58,7 @@ export class WatergateValve {
     this.startTime = active ? new Date() : null;
     this.platform.log.debug('SetActive: ', active, this.startTime);
 
-    //TODO set pin
+    this.gpio.write(active);
 
     if (this.timeoutHandle) {
       clearTimeout(this.timeoutHandle);
@@ -82,22 +86,13 @@ export class WatergateValve {
   }
 
   async getInUse(): Promise<CharacteristicValue> {
-    const isOn = !!this.startTime;
-
-    //TODO read from pin
-
+    const isOn = this.gpio.read() || !!this.startTime;
     this.platform.log.debug('GetInUse: ', isOn);
     return isOn;
   }
 
   async getValveType(): Promise<CharacteristicValue> {
     return this.platform.Characteristic.ValveType.IRRIGATION;
-  }
-
-  async setSetDuration(value: CharacteristicValue) {
-    this.platform.log.debug('setSetDuration', value);
-    const duration = value as number;
-    this.accessory.context.duration = duration;
   }
 
   private getDuration(): number {
@@ -110,9 +105,19 @@ export class WatergateValve {
     return duration;
   }
 
+  async setSetDuration(value: CharacteristicValue) {
+    this.platform.log.debug('setSetDuration', value);
+    const duration = value as number;
+    this.accessory.context.duration = duration;
+  }
+
   async getRemainingDuration(): Promise<CharacteristicValue> {
     this.platform.log.debug('getRemainingDuration');
     return this.calculateRemainingDuration();
+  }
+
+  shutdown() {
+    this.gpio.close();
   }
 
   private calculateRemainingDuration(): number { 
